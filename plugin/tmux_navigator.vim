@@ -46,6 +46,10 @@ if !exists("g:tmux_navigator_disable_when_zoomed")
   let g:tmux_navigator_disable_when_zoomed = 0
 endif
 
+if !exists("g:tmux_navigator_stop_at_window_edge")
+  let g:tmux_navigator_stop_at_window_edge= 0
+endif
+
 function! s:TmuxOrTmateExecutable()
   return (match($TMUX, 'tmate') != -1 ? 'tmate' : 'tmux')
 endfunction
@@ -86,6 +90,22 @@ function! s:ShouldForwardNavigationBackToTmux(tmux_last_pane, at_tab_page_edge)
   return a:tmux_last_pane || a:at_tab_page_edge
 endfunction
 
+function! s:TmuxPaneAtEdgeOfWindow(direction)
+  if g:tmux_navigator_stop_at_window_edge == 0
+    return 0
+  endif
+  if a:direction == 'h'
+    return s:TmuxCommand("display-message -p '#{pane_at_left}'")
+  elseif a:direction == 'j'
+    return s:TmuxCommand("display-message -p '#{pane_at_bottom}'")
+  elseif a:direction == 'k'
+    return s:TmuxCommand("display-message -p '#{pane_at_top}'")
+  elseif a:direction == 'l'
+    return s:TmuxCommand("display-message -p '#{pane_at_right}'")
+  endif
+  return 0
+endfunction
+
 function! s:TmuxAwareNavigate(direction)
   let nr = winnr()
   let tmux_last_pane = (a:direction == 'p' && s:tmux_is_last_pane)
@@ -108,10 +128,12 @@ function! s:TmuxAwareNavigate(direction)
       catch /^Vim\%((\a\+)\)\=:E141/ " catches the no file name error
       endtry
     endif
-    let args = 'select-pane -t ' . shellescape($TMUX_PANE) . ' -' . tr(a:direction, 'phjkl', 'lLDUR')
-    silent call s:TmuxCommand(args)
-    if s:NeedsVitalityRedraw()
-      redraw!
+    if s:TmuxPaneAtEdgeOfWindow(a:direction) != 1
+      let args = 'select-pane -t ' . shellescape($TMUX_PANE) . ' -' . tr(a:direction, 'phjkl', 'lLDUR')
+      silent call s:TmuxCommand(args)
+      if s:NeedsVitalityRedraw()
+        redraw!
+      endif
     endif
     let s:tmux_is_last_pane = 1
   else
